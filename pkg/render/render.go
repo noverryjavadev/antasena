@@ -2,35 +2,51 @@ package render
 
 import (
 	"bytes"
+	"github.com/noverryjavadev/antasena/pkg/config"
+	"github.com/noverryjavadev/antasena/pkg/models"
 	"html/template"
 	"log"
 	"net/http"
 	"path/filepath"
 )
 
-// RenderTemplate renders a template
-func RenderTemplate(w http.ResponseWriter, tmpl string) {
+var functions = template.FuncMap{}
 
-	// create template cache
-	tc, err := createTemplateCache()
-	if err != nil {
-		log.Fatalln(err)
+var app *config.AppConfig
+
+func NewTemplates(a *config.AppConfig) {
+	app = a
+}
+
+// RenderTemplate renders a template
+func RenderTemplate(w http.ResponseWriter, tmpl string, td *models.TemplateData) {
+
+	var tc map[string]*template.Template
+	if app.UseCache {
+		tc = app.TemplateCache
+	} else {
+		tc, _ = CreateTemplateCache()
 	}
 
+	// create a template cache
+	//tc, err := CreateTemplateCache()
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+
+	// get requested template from cache
 	t, ok := tc[tmpl]
 	if !ok {
-		log.Fatal(err)
+		log.Fatal("could not find template", tmpl)
 	}
 
 	buf := new(bytes.Buffer)
+	td = AddDefaultData(td)
 
-	_ = t.Execute(buf, nil)
-	if err != nil {
-		log.Println(err)
-	}
+	_ = t.Execute(buf, td)
 
 	// render the template
-	_, err = buf.WriteTo(w)
+	_, err := buf.WriteTo(w)
 	if err != nil {
 		log.Println(err)
 	}
@@ -81,7 +97,12 @@ func RenderTemplate(w http.ResponseWriter, tmpl string) {
 //	return nil
 //}
 
-func createTemplateCache() (map[string]*template.Template, error) {
+func AddDefaultData(td *models.TemplateData) *models.TemplateData {
+
+	return td
+}
+
+func CreateTemplateCache() (map[string]*template.Template, error) {
 	myCache := map[string]*template.Template{}
 
 	// get all of the files named *.page.tmpl from ./templates
@@ -93,7 +114,7 @@ func createTemplateCache() (map[string]*template.Template, error) {
 	// range through all files ending with *.page.tmpl
 	for _, page := range pages {
 		name := filepath.Base(page)
-		ts, err := template.New(name).Parse(page)
+		ts, err := template.New(name).ParseFiles(page)
 		if err != nil {
 			return myCache, err
 		}
